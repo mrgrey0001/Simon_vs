@@ -48,7 +48,14 @@ pip install -r requirements.txt
 
 ## 🧪 Usage
 
-python3 simon.py -d http://target-website.com
+python simon.py -d http://target-site.com -l 5 -o myreport.pdf
+
+   -d : Target domain
+
+   -l : Crawl level (depth)
+
+   -o : Output PDF file name
+
 
 ---
 
