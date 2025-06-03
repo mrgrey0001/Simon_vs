@@ -1,8 +1,6 @@
-# Simon_vs
- An automated vulnerability scanner tool for bug bounty programs that categorizes vulnerabilities by severity (low, medium, high) and generates detailed reports.
 # S!M0N vuln-scanner
 
-A Python-based web vulnerability scanner that detects common web security issues (Low, Medium, High risk) and generates a PDF report.
+A Python-based web vulnerability scanner that detects common web security issues (Low, Medium, High risk) and generates a detailed report.
 
 ## Features
 
