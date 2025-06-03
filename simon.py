@@ -9,7 +9,7 @@ import requests
 from urllib.parse import urljoin, urlparse
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER
 
 def print_banner():
@@ -187,7 +187,8 @@ class VulnerabilityScanner:
 def generate_report(filename, findings):
     doc = SimpleDocTemplate(filename, pagesize=letter)
     styles = getSampleStyleSheet()
-    styles.add(Paragraph(name='SeverityHeading', parent=styles['Heading2'], alignment=TA_CENTER))
+    # FIX: Use ParagraphStyle, not Paragraph, for custom styles
+    styles.add(ParagraphStyle(name='SeverityHeading', parent=styles['Heading2'], alignment=TA_CENTER))
     elements = []
     elements.append(Paragraph("Vulnerability Assessment Report", styles['Title']))
     elements.append(Spacer(1, 12))
