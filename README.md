@@ -36,6 +36,6 @@ A Python-based web vulnerability scanner that detects common web security issues
 
 ## Installation
 
-git clone https://github.com/your-username/Simon_vs.git
+git clone https://github.com/mrgrey0001/Simon_vs.git
 cd Simon_vs
 pip install -r requirements.txt
