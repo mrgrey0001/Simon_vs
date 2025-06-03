@@ -190,7 +190,7 @@ def generate_report(filename, findings):
     # FIX: Use ParagraphStyle, not Paragraph, for custom styles
     styles.add(ParagraphStyle(name='SeverityHeading', parent=styles['Heading2'], alignment=TA_CENTER))
     elements = []
-    elements.append(Paragraph("Vulnerability Assessment Report", styles['Title']))
+    elements.append(Paragraph("Bug Report By S!M0N", styles['Title']))
     elements.append(Spacer(1, 12))
     for severity in ['High', 'Medium', 'Low']:
         if findings[severity]:
