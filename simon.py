@@ -1,4 +1,4 @@
-ccomplete this code import sys
+import sys
 import argparse
 import requests
 import random
