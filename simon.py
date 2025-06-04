@@ -83,7 +83,7 @@ PATH_TRAVERSAL_PAYLOADS = [
     "../../../../etc/passwd", "..\\..\\..\\..\\windows\\win.ini", "../../../../etc/shadow",
     "%2e%2e%2f%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd", "%2e%2e%5c%2e%2e%5c%2e%2e%5c%2e%2e%5cwindows%5cwin.ini",
     "%252e%252e%252f%252e%252e%252f%252e%252e%252f%252e%252e%252fetc%252fpasswd",
-    "%u002e%u002e%u002f%u002e%u002e%u002f%u002e%u002e%u002f%u002e%u002e%u002fetc%u002fpasswd",
+    "%u002e%u002e%u002f%u002e%u002e%u002f%u002e%u002e%u002f%u002e%u002e%2fetc%u002fpasswd",
     "..%2f..%2f..%2f..%2fetc%2fpasswd", "..%5c..%5c..%5c..%5cwindows%5cwin.ini",
     "../../../../etc/passwd%00", "../../../../etc/passwd%00.jpg",
     "../../../../etc/hosts", "../../../../proc/version", "../../../../proc/self/environ",
@@ -156,7 +156,7 @@ def print_banner():
     subtitle = "SiM0N Enhanced Vulnerability Scanner v2.0"
     print(Fore.GREEN + main_banner)
     print(Fore.RED + subtitle.center(80, "-"))
-    print(Fore.YELLOW + "Features: Subdomain Discovery | Advanced Payloads | Parameter Mining | Live Domain Check")
+    print(Fore.YELLOW + "Subdomain Discovery | Advanced Payloads | Parameter Mining | Live Domain Check")
     print("\n")
 
 def discover_subdomains(domain):
@@ -196,7 +196,7 @@ def check_live_domains(domains):
             
             # Try HTTP first
             resp = requests.get(url, headers={'User-Agent': random.choice(USER_AGENTS)}, 
-                              timeout=10, allow_redirects=True)
+                                 timeout=10, allow_redirects=True)
             if resp.status_code == 200:
                 return url
             
@@ -616,6 +616,11 @@ def generate_report(filename, findings):
     
     doc.build(elements)
 
+def scan_single_url_task(url, params):
+    """Wrapper function to scan a single URL, suitable for ThreadPoolExecutor."""
+    scanner = EnhancedVulnerabilityScanner(url)
+    return scanner.scan(params)
+
 def main():
     print_banner()
     parser = argparse.ArgumentParser(description="SiM0N Enhanced vuln-scanner: Advanced web vulnerability scanner with PDF reporting.")
@@ -631,66 +636,56 @@ def main():
     enable_subdomains = args.subdomains
     threads = args.threads
 
-    # Discover subdomains if enabled
-    domains_to_scan = [target]
-    if enable_subdomains:
-        parsed_target = urlparse(target)
-        base_domain = parsed_target.netloc if parsed_target.netloc else target.split('/')[0]
-        
-        logging.info(f"Starting subdomain discovery for: {base_domain}")
-        subdomains = discover_subdomains(base_domain)
-        
-        if subdomains:
-            logging.info(f"Checking live status for {len(subdomains)} discovered subdomains.")
-            live_subdomains = check_live_domains(subdomains)
-            domains_to_scan.extend(live_subdomains)
-        else:
-            logging.info("No subdomains discovered.")
-
     all_findings = {'Critical': [], 'High': [], 'Medium': [], 'Low': []}
-    
-    for domain_target in domains_to_scan: # Renamed 'domain' to 'domain_target' to avoid confusion with `domain` variable in check_domain.
-        print(Fore.CYAN + f"\n[*] Scanning domain: {domain_target}")
-        
-        # Crawl URLs and extract parameters
-        print(Fore.CYAN + f"[*] Crawling '{domain_target}' up to depth {level} ...")
-        urls, params = crawl_urls(domain_target, level)
-        print(Fore.CYAN + f"[*] Found {len(urls)} URLs and {len(params)} parameters to scan for {domain_target}.")
-        
-        # Function to be executed by each thread
-        def perform_scan_for_url(url, discovered_params):
-            scanner = EnhancedVulnerabilityScanner(url)
-            return scanner.scan(discovered_params)
 
-        # Scan each URL with discovered parameters using ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=threads) as executor:
-            # Pass the shared `params` set to each scanner instance
-            future_to_url = {executor.submit(perform_scan_for_url, url, params): url for url in urls}
-            
-            for future in tqdm(as_completed(future_to_url), total=len(urls), desc=f"Scanning URLs for {domain_target}"):
-                url = future_to_url[future]
-                try:
-                    findings = future.result()
-                    for severity in findings:
-                        all_findings[severity].extend(findings[severity])
-                except Exception as e:
-                    logging.error(f"Error scanning {url}: {str(e)}")
-                    print(Fore.RED + f"[-] Error scanning {url}: {str(e)}")
-
-    # Generate the final report
-    print(Fore.CYAN + f"\n[*] Generating report: {output_file}")
-    generate_report(output_file, all_findings)
-    print(Fore.GREEN + "[+] Scan completed. Report saved.")
-    logging.info("Scan completed. Report saved.")
-
-if __name__ == "__main__":
     try:
-        main()
+        # Discover subdomains if enabled
+        domains_to_scan = [target]
+        if enable_subdomains:
+            base_domain = urlparse(target).netloc
+            if not base_domain:
+                base_domain = target.split('/')[0]
+            subdomains = discover_subdomains(base_domain)
+            if subdomains:
+                live_subdomains = check_live_domains(subdomains)
+                domains_to_scan.extend(live_subdomains)
+
+        for domain in domains_to_scan:
+            print(Fore.CYAN + f"\n[*] Scanning domain: {domain}")
+            
+            # Crawl URLs and extract parameters
+            print(Fore.CYAN + f"[*] Crawling up to level {level} ...")
+            urls, params = crawl_urls(domain, level)
+            print(Fore.CYAN + f"[*] Found {len(urls)} URLs and {len(params)} parameters to scan.")
+            
+            # Scan each URL with discovered parameters
+            with ThreadPoolExecutor(max_workers=threads) as executor:
+                # Use scan_single_url_task for executor
+                future_to_url = {executor.submit(scan_single_url_task, url, params): url for url in urls}
+                for future in tqdm(as_completed(future_to_url), total=len(urls), desc="Scanning URLs"):
+                    url = future_to_url[future]
+                    try:
+                        findings = future.result()
+                        for severity in findings:
+                            all_findings[severity].extend(findings[severity])
+                    except Exception as e:
+                        print(Fore.RED + f"[-] Error scanning {url}: {str(e)}")
+
     except KeyboardInterrupt:
-        print(Fore.RED + "\n[!] Scan interrupted by user")
-        logging.info("Scan interrupted by user.")
+        print(Fore.RED + "\n[!] Scan interrupted by user. Generating report for collected findings...")
+        generate_report(output_file, all_findings) # Save report with current findings
         sys.exit(1)
     except Exception as e:
-        print(Fore.RED + f"\n[!] An unhandled error occurred: {str(e)}")
-        logging.critical(f"An unhandled error occurred: {str(e)}", exc_info=True)
+        print(Fore.RED + f"\n[!] An unexpected error occurred: {str(e)}")
+        logging.error(f"Critical error in main execution: {e}", exc_info=True)
+        # Optionally, generate a partial report even on unexpected errors
+        generate_report(output_file, all_findings) 
         sys.exit(1)
+
+    # Generate the final report if the scan completes successfully
+    print(Fore.CYAN + f"\n[*] Generating final report: {output_file}")
+    generate_report(output_file, all_findings)
+    print(Fore.GREEN + "[+] Scan completed successfully. Report saved.")
+
+if __name__ == "__main__":
+    main()
