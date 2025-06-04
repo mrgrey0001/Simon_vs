@@ -749,7 +749,6 @@ def main():
     python simon.py -d [https://critical-system.org](https://critical-system.org) -l 2 -o full_scan_report.pdf --subdomains --threads 15
     ```
     (A comprehensive scan including subdomains, deeper crawling, and optimized threading.)
-
 """
     )
     # Define command-line arguments
