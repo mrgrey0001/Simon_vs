@@ -1,6 +1,6 @@
-requests==2.26.0
-beautifulsoup4==4.10.0
-reportlab==3.6.8
-tqdm==4.62.3
-colorama==0.4.4
-dnspython==2.2.1
+requests
+beautifulsoup4
+reportlab
+tqdm
+colorama
+dnspython
