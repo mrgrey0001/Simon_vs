@@ -750,21 +750,6 @@ def main():
     ```
     (A comprehensive scan including subdomains, deeper crawling, and optimized threading.)
 
----
-### 🧠 Savage Wisdom for the Digital Warrior:
-
-"The only truly secure system is one that is powered off,
-  locked in a titanium bunker, and buried in 20 feet of concrete."
-  - Bruce Schneier (A stark reminder of the impossibility of absolute security.)
-
-"Security is not a product, but a process."
-  - Bruce Schneier (Again, because some truths bear repeating. It's an ongoing battle!)
-
-"The best way to predict the future is to create it."
-  - Peter Drucker (So go forth, find those bugs before the bad guys do!)
-
-"Amateurs hack systems, professionals hack people."
-  - Unknown (A chilling thought, emphasizing the human element in security.)
 """
     )
     # Define command-line arguments
