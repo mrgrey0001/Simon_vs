@@ -168,7 +168,7 @@ def print_banner():
     subtitle = "SiM0N Enhanced Vulnerability Scanner v2.0"
     print(Fore.GREEN + main_banner)
     print(Fore.RED + subtitle.center(80, "-"))
-    print(Fore.YELLOW + "Features: Subdomain Discovery | Advanced Payloads | Parameter Mining | Live Domain Check")
+    print(Fore.YELLOW + "Subdomain Discovery | Advanced Payloads | Parameter Mining | Live Domain Check")
     print("\n")
 
 def discover_subdomains(domain):
@@ -727,25 +727,25 @@ def main():
 ## 🧪 Usage Examples:
 
 1.  **Basic Scan:**
-    ```bash
+    ```
     python simon.py -d [http://example.com](http://example.com)
     ```
     (Scans `http://example.com`, crawls to depth 1, saves report as `vulnerability_report.pdf`.)
 
 2.  **Deep Scan with Custom Output:**
-    ```bash
+    ```
     python simon.py -d [https://mywebapp.net](https://mywebapp.net) -l 3 -o my_web_app_report.pdf
     ```
     (Scans `https://mywebapp.net`, crawls to depth 3, saves report as `my_web_app_report.pdf`.)
 
 3.  **Scan with Subdomain Discovery and More Threads:**
-    ```bash
+    ```
     python simon.py -d [http://maincorp.com](http://maincorp.com) --subdomains --threads 20
     ```
     (Scans `http://maincorp.com` and its discovered subdomains, using 20 concurrent threads.)
 
 4.  **Full-Blown Recon & Scan:**
-    ```bash
+    ```
     python simon.py -d [https://critical-system.org](https://critical-system.org) -l 2 -o full_scan_report.pdf --subdomains --threads 15
     ```
     (A comprehensive scan including subdomains, deeper crawling, and optimized threading.)
