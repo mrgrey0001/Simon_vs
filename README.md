@@ -48,13 +48,14 @@ pip install -r requirements.txt
 
 ## 🧪 Usage
 
-python simon.py -d http://target-site.com -l 5 -o myreport.pdf
+python simon.py -d [https://example.com] -l [2] -o [example_scan_report.pdf] --subdomains --threads [15]
 
-   -d : Target domain
+-d : Target domain (e.g., http://example.com, https://www.mysite.org)
+-l : Crawl level (depth of URL crawling, default: 1)
+-o : Output PDF file name (default: vulnerability_report.pdf)
+--subdomains : Enable subdomain discovery for the target domain (optional)
+--threads : Number of threads for concurrent scanning (default: 10)
 
-   -l : Crawl level (depth)
-
-   -o : Output PDF file name
 
 
 ---
