@@ -254,7 +254,7 @@ def check_live_domains(domains):
                 live_domains.append(result)
                 print(Fore.GREEN + f"[+] Live domain: {result}")
     
-    return live_domains
+    return list(live_domains)
 
 def extract_parameters_from_url(url):
     """Extracts query parameters from a given URL."""
@@ -749,7 +749,8 @@ def main():
     python simon.py -d [https://critical-system.org](https://critical-system.org) -l 2 -o full_scan_report.pdf --subdomains --threads 15
     ```
     (A comprehensive scan including subdomains, deeper crawling, and optimized threading.)
-"""
+""",
+        formatter_class=argparse.RawTextHelpFormatter # This line ensures epilog formatting is preserved
     )
     # Define command-line arguments
     parser.add_argument('-d', '--domain', required=True, help='Target website URL (e.g., http://example.com)')
