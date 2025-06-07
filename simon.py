@@ -168,7 +168,7 @@ def print_banner():
     subtitle = "SiM0N Enhanced Vulnerability Scanner v2.0"
     print(Fore.GREEN + main_banner)
     print(Fore.RED + subtitle.center(80, "-"))
-    print(Fore.YELLOW + "Features: Subdomain Discovery | Advanced Payloads | Parameter Mining | Live Domain Check")
+    print(Fore.YELLOW + "Subdomain Discovery | Advanced Payloads | Parameter Mining | Live Domain Check")
     print("\n")
 
 def discover_subdomains(domain):
