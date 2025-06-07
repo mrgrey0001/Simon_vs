@@ -17,8 +17,6 @@ import dns.resolver
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import logging
-import os
-from datetime import datetime
 
 # Initialize colorama for colored console output
 init(autoreset=True)
@@ -167,10 +165,10 @@ def print_banner():
        ░▒▓█▓▒░         ░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░ ░▒▓█▓▒░░▒▓█▓▒░ ░▒▓█▓▒░░▒▓█▓▒░ 
 ░▒▓███████▓▒░  ░▒▓█▓▒░ ░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░ ░▒▓████████▓▒░ ░▒▓█▓▒░░▒▓█▓▒░
     """
-    subtitle = "SiM0N Enhanced Vulnerability Scanner v2.1"
+    subtitle = "SiM0N Enhanced Vulnerability Scanner v2.0"
     print(Fore.GREEN + main_banner)
     print(Fore.RED + subtitle.center(80, "-"))
-    print(Fore.YELLOW + "Features: Subdomain Discovery | Advanced Payloads | Parameter Mining | Live Domain Check | Status Code Filtering")
+    print(Fore.YELLOW + "Subdomain Discovery | Advanced Payloads | Parameter Mining | Live Domain Check")
     print("\n")
 
 def discover_subdomains(domain):
@@ -255,26 +253,6 @@ def check_live_domains(domains):
                 # print(Fore.GREEN + f"[+] Live domain: {result}") # Commented out to avoid cluttering progress bar
     
     return list(live_domains)
-
-def save_subdomains_to_file(subdomains, filename):
-    """Save discovered subdomains to a separate file."""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    subdomain_file = f"subdomains_{timestamp}_{filename.replace('.pdf', '.txt')}"
-    
-    try:
-        with open(subdomain_file, 'w') as f:
-            f.write(f"Subdomain Discovery Results - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write("=" * 60 + "\n\n")
-            f.write(f"Total Subdomains Found: {len(subdomains)}\n\n")
-            
-            for i, subdomain in enumerate(subdomains, 1):
-                f.write(f"{i:3d}. {subdomain}\n")
-        
-        print(Fore.GREEN + f"[+] Subdomains saved to: {subdomain_file}")
-        return subdomain_file
-    except Exception as e:
-        print(Fore.RED + f"[-] Error saving subdomains to file: {e}")
-        return None
 
 def extract_parameters_from_url(url):
     """Extracts query parameters from a given URL."""
@@ -446,7 +424,7 @@ class EnhancedVulnerabilityScanner:
                     new_query = '&'.join([f"{k}={v[0] if isinstance(v, list) else v}" for k, v in query_params.items()])
                     url = urlunparse(parsed_url._replace(query=new_query)) # Rebuild URL with new query
                 resp = requests.request(method, url, headers=headers, timeout=10, allow_redirects=True)
-            # Don't raise for status here - we want to handle different status codes
+            resp.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx status codes)
             return resp
         except requests.exceptions.RequestException as e:
             logging.debug(f"Request failed for {url} ({method}): {e}")
@@ -455,52 +433,544 @@ class EnhancedVulnerabilityScanner:
             logging.debug(f"Unexpected error in send_request to {url} ({method}): {e}")
             return None
 
-    # Add more scan methods or utilities if needed here...
+    def check_sql_injection(self):
+        """Tests for SQL Injection vulnerabilities by injecting SQL payloads."""
+        print(Fore.YELLOW + "[*] Testing SQL Injection...")
+        for param in self.parameters:
+            for payload in SQLI_PAYLOADS:
+                params = {param: payload}
+                resp = self.send_request(self.target_url, params)
+                if resp:
+                    # Look for common SQL error messages in the response
+                    error_patterns = [
+                        "syntax error", "mysql", "you have an error in your sql syntax",
+                        "postgresql", "ora-", "microsoft ole db", "sqlite", "warning: mysql",
+                        "error in your sql", "mariadb", "driver", "jdbc", "database error"
+                    ]
+                    if any(pattern in resp.text.lower() for pattern in error_patterns):
+                        print(Fore.RED + f"[!] SQL Injection detected at {resp.url} with param '{param}' and payload '{payload}'")
+                        self.vulnerabilities.append({
+                            'type': 'SQL Injection',
+                            'url': resp.url,
+                            'parameter': param,
+                            'payload': payload,
+                            'description': f"SQL Injection vulnerability found with parameter '{param}'"
+                        })
 
-# === End of class ===
+    def check_xss(self):
+        """Tests for Cross-Site Scripting (XSS) vulnerabilities by injecting XSS payloads."""
+        print(Fore.YELLOW + "[*] Testing XSS vulnerabilities...")
+        for param in self.parameters:
+            for payload in XSS_PAYLOADS:
+                params = {param: payload}
+                resp = self.send_request(self.target_url, params)
+                # A basic check: if the payload is reflected in the response body, it's a potential XSS.
+                # Real XSS detection often requires more sophisticated parsing and browser simulation.
+                if resp and payload in resp.text:
+                    print(Fore.RED + f"[!] XSS detected at {resp.url} with param '{param}' and payload '{payload}'")
+                    self.vulnerabilities.append({
+                        'type': 'XSS',
+                        'url': resp.url,
+                        'parameter': param,
+                        'payload': payload,
+                        'description': f"XSS vulnerability found with parameter '{param}'"
+                    })
+
+    def check_path_traversal(self):
+        """Tests for Path Traversal vulnerabilities by injecting directory traversal payloads."""
+        print(Fore.YELLOW + "[*] Testing Path Traversal...")
+        for param in self.parameters:
+            for payload in PATH_TRAVERSAL_PAYLOADS:
+                params = {param: payload}
+                resp = self.send_request(self.target_url, params)
+                if resp:
+                    # Look for patterns indicative of file system access (e.g., /etc/passwd content)
+                    traversal_patterns = [
+                        "root:x", "[extensions]", "boot loader", "system volume information",
+                        "program files", "windows", "config.sys", "autoexec.bat",
+                        "daemon:x" # Added for Linux /etc/passwd output
+                    ]
+                    if any(pattern in resp.text.lower() for pattern in traversal_patterns):
+                        print(Fore.RED + f"[!] Path Traversal detected at {resp.url} with param '{param}' and payload '{payload}'")
+                        self.vulnerabilities.append({
+                            'type': 'Path Traversal',
+                            'url': resp.url,
+                            'parameter': param,
+                            'payload': payload,
+                            'description': f"Path Traversal vulnerability found with parameter '{param}'"
+                        })
+
+    def check_command_injection(self):
+        """Tests for Command Injection vulnerabilities by injecting OS commands."""
+        print(Fore.YELLOW + "[*] Testing Command Injection...")
+        for param in self.parameters:
+            for payload in COMMAND_INJECTION_PAYLOADS:
+                params = {param: payload}
+                resp = self.send_request(self.target_url, params)
+                if resp:
+                    # Look for patterns indicative of command execution output
+                    command_patterns = [
+                        "uid=", "gid=", "groups=", "total ", "directory of", "volume serial number",
+                        "bin", "sbin", "usr" # Common in 'ls' or 'id' output
+                    ]
+                    if any(pattern in resp.text.lower() for pattern in command_patterns):
+                        print(Fore.RED + f"[!] Command Injection detected at {resp.url} with param '{param}' and payload '{payload}'")
+                        self.vulnerabilities.append({
+                            'type': 'Command Injection',
+                            'url': resp.url,
+                            'parameter': param,
+                            'payload': payload,
+                            'description': f"Command Injection vulnerability found with parameter '{param}'"
+                        })
+
+    def check_ldap_injection(self):
+        """Tests for LDAP Injection vulnerabilities by injecting LDAP filter syntax."""
+        print(Fore.YELLOW + "[*] Testing LDAP Injection...")
+        for param in self.parameters:
+            for payload in LDAP_PAYLOADS:
+                params = {param: payload}
+                resp = self.send_request(self.target_url, params)
+                if resp:
+                    # Look for common LDAP error messages or directory attributes
+                    ldap_patterns = [
+                        "javax.naming.directory", "ldap", "cn=", "ou=", "dc=", "objectclass",
+                        "ldap_search", "ldap_bind" # common error messages
+                    ]
+                    if any(pattern in resp.text.lower() for pattern in ldap_patterns):
+                        print(Fore.RED + f"[!] LDAP Injection detected at {resp.url} with param '{param}' and payload '{payload}'")
+                        self.vulnerabilities.append({
+                            'type': 'LDAP Injection',
+                            'url': resp.url,
+                            'parameter': param,
+                            'payload': payload,
+                            'description': f"LDAP Injection vulnerability found with parameter '{param}'"
+                        })
+
+    def check_xpath_injection(self):
+        """Tests for XPath Injection vulnerabilities by injecting XPath syntax."""
+        print(Fore.YELLOW + "[*] Testing XPath Injection...")
+        for param in self.parameters:
+            for payload in XPATH_PAYLOADS:
+                params = {param: payload}
+                resp = self.send_request(self.target_url, params)
+                if resp:
+                    # Look for common XPath error messages
+                    xpath_patterns = [
+                        "xpath", "xquery", "xmlexception", "xpath syntax error",
+                        "failed to compile xpath expression", "invalid xpath" # common error messages
+                    ]
+                    if any(pattern in resp.text.lower() for pattern in xpath_patterns):
+                        print(Fore.RED + f"[!] XPath Injection detected at {resp.url} with param '{param}' and payload '{payload}'")
+                        self.vulnerabilities.append({
+                            'type': 'XPath Injection',
+                            'url': resp.url,
+                            'parameter': param,
+                            'payload': payload,
+                            'description': f"XPath Injection vulnerability found with parameter '{param}'"
+                        })
+
+    def check_clickjacking(self):
+        """
+        Tests for Clickjacking vulnerability by checking for missing X-Frame-Options
+        or Content-Security-Policy headers.
+        """
+        print(Fore.YELLOW + "[*] Testing Clickjacking...")
+        resp = self.send_request(self.target_url)
+        if resp and 'x-frame-options' not in resp.headers and 'content-security-policy' not in resp.headers:
+            print(Fore.YELLOW + f"[!] Clickjacking risk at {self.target_url}: No X-Frame-Options or CSP frame policy set")
+            self.vulnerabilities.append({
+                'type': 'Clickjacking',
+                'url': self.target_url,
+                'description': 'No X-Frame-Options or Content-Security-Policy (frame-ancestors) header set, indicating potential Clickjacking vulnerability.'
+            })
+
+    def check_open_redirect(self):
+        """Tests for Open Redirect vulnerabilities by injecting redirect payloads."""
+        print(Fore.YELLOW + "[*] Testing Open Redirect...")
+        # Payloads that attempt to redirect to an external malicious site
+        redirect_payloads = ["//evil.com", "http://evil.com", "https://evil.com"] 
+        for param in self.parameters:
+            for payload in redirect_payloads:
+                params = {param: payload}
+                resp = self.send_request(self.target_url, params)
+                # If the response URL contains the payload or redirects to the payload's domain, it's a hit.
+                if resp and (payload in resp.url or urlparse(resp.url).netloc == urlparse(payload).netloc):
+                    print(Fore.YELLOW + f"[!] Open Redirect detected at {resp.url} with param '{param}' (Payload: {payload})")
+                    self.vulnerabilities.append({
+                        'type': 'Open Redirect',
+                        'url': resp.url,
+                        'parameter': param,
+                        'payload': payload,
+                        'description': f"Open Redirect vulnerability found with parameter '{param}'"
+                    })
+
+    def check_sensitive_files(self):
+        """Tests for exposure of common sensitive files and directories."""
+        print(Fore.YELLOW + "[*] Testing Sensitive Files...")
+        for path in SENSITIVE_FILES:
+            url = urljoin(self.target_url, path) # Construct full URL for the sensitive file
+            resp = self.send_request(url)
+            # If status code is 200 (OK) and the response has some content, it's likely exposed.
+            if resp and resp.status_code == 200 and len(resp.text) > 10: 
+                print(Fore.YELLOW + f"[!] Sensitive file or directory found: {url}")
+                self.vulnerabilities.append({
+                    'type': 'Sensitive File/Directory',
+                    'url': url,
+                    'description': f"Accessible sensitive file or directory: {path}"
+                })
+
+    def check_http_methods(self):
+        """
+        Tests for potentially risky HTTP methods allowed on the target URL.
+        Methods other than GET/POST being allowed can sometimes indicate misconfigurations.
+        """
+        print(Fore.YELLOW + "[*] Testing HTTP Methods...")
+        for method in HTTP_METHODS:
+            try:
+                resp = requests.request(method, self.target_url, headers={'User-Agent': random.choice(USER_AGENTS)}, timeout=10)
+                # If the status code is not a typical error for disallowed methods (e.g., 405 Method Not Allowed, 501 Not Implemented),
+                # it suggests the method might be allowed or handled.
+                if resp.status_code not in [400, 401, 403, 404, 405, 501]:
+                    print(Fore.YELLOW + f"[!] Potentially risky HTTP method allowed: {method} (Status: {resp.status_code})")
+                    self.vulnerabilities.append({
+                        'type': 'HTTP Methods',
+                        'url': self.target_url,
+                        'description': f"Potentially risky HTTP method allowed: {method} (Status: {resp.status_code})"
+                    })
+            except requests.exceptions.RequestException as e:
+                logging.debug(f"Error testing HTTP method {method} on {self.target_url}: {e}")
+                pass # Continue to next method even if one request fails
+
+    def check_security_headers(self):
+        """
+        Checks for the presence of common security-related HTTP response headers.
+        Missing headers can indicate a lack of security hardening.
+        """
+        print(Fore.YELLOW + "[*] Checking Security Headers...")
+        resp = self.send_request(self.target_url)
+        if resp:
+            missing_headers = []
+            # List of important security headers to check
+            security_headers = [
+                'X-XSS-Protection', 'X-Content-Type-Options', 'X-Frame-Options',
+                'Content-Security-Policy', 'Strict-Transport-Security', 'Referrer-Policy'
+            ]
+            
+            for header in security_headers:
+                # Check for header presence in a case-insensitive manner
+                if header.lower() not in [h.lower() for h in resp.headers.keys()]: 
+                    missing_headers.append(header)
+            
+            if missing_headers:
+                print(Fore.YELLOW + f"[!] Missing security headers: {', '.join(missing_headers)}")
+                self.vulnerabilities.append({
+                    'type': 'Security Headers',
+                    'url': self.target_url,
+                    'description': f"Missing security headers: {', '.join(missing_headers)}"
+                })
+
+def generate_report(filename, findings):
+    """
+    Generates a PDF report of the scan findings using ReportLab.
+    Findings are categorized and sorted by severity.
+    """
+    doc = SimpleDocTemplate(filename, pagesize=letter)
+    styles = getSampleStyleSheet()
+    # Custom style for severity headings in the PDF
+    styles.add(ParagraphStyle(name='SeverityHeading', parent=styles['Heading2'], alignment=TA_CENTER))
+    elements = []
+    elements.append(Paragraph("Bug Report By SiM0N", styles['Title']))
+    elements.append(Spacer(1, 12)) # Add some vertical space
+    
+    # Define the order of severity for reporting
+    severity_order = ['Critical', 'High', 'Medium', 'Low']
+    
+    for severity in severity_order:
+        if findings[severity]: # Only add section if there are findings for this severity
+            elements.append(Paragraph(f"{severity} Risk Findings", styles['SeverityHeading']))
+            elements.append(Spacer(1, 8))
+            for vuln in findings[severity]:
+                elements.append(Paragraph(f"<b>Type:</b> {vuln['type']}", styles['h3'])) # Bold type
+                elements.append(Paragraph(f"<b>URL:</b> {vuln['url']}", styles['Normal'])) # Normal text for URL
+                if 'parameter' in vuln:
+                    elements.append(Paragraph(f"<b>Parameter:</b> {vuln['parameter']}", styles['Normal']))
+                if 'payload' in vuln:
+                    elements.append(Paragraph(f"<b>Payload:</b> {vuln['payload']}", styles['Normal']))
+                elements.append(Paragraph(f"<b>Description:</b> {vuln['description']}", styles['Normal']))
+                elements.append(Spacer(1, 8)) # Space after each vulnerability entry
+            elements.append(Spacer(1, 16)) # More space between severity sections
+    
+    # If no vulnerabilities were found across all categories
+    if not any(findings.values()):
+        elements.append(Paragraph("No vulnerabilities found.", styles['Normal']))
+    
+    doc.build(elements) # Build the PDF document
+
+def scan_single_url_task(url, params):
+    """
+    A wrapper function to instantiate EnhancedVulnerabilityScanner and run its scan method.
+    This is designed to be used with ThreadPoolExecutor for concurrent URL scanning.
+    """
+    scanner = EnhancedVulnerabilityScanner(url)
+    return scanner.scan(params)
 
 def main():
-    print_banner()
+    """Main function to parse arguments, orchestrate scanning, and generate reports."""
+    print_banner() # Display the tool's banner
 
-    parser = argparse.ArgumentParser(description="SiM0N Enhanced Vulnerability Scanner")
-    parser.add_argument('-d', '--domain', required=True, help='Target domain to scan')
-    parser.add_argument('-o', '--output', default='scan_report.pdf', help='Output PDF report filename')
-    parser.add_argument('-l', '--level', type=int, default=1, help='Crawling depth (default: 1)')
+    # Configure argument parser with a detailed description and epilog
+    parser = argparse.ArgumentParser(
+        description="SiM0N Enhanced vuln-scanner: An advanced web vulnerability scanner with PDF reporting capabilities. It performs subdomain discovery, parameter mining, and checks for various common web vulnerabilities.",
+        epilog="""
+## 🧪 Usage Examples:
+
+1.  **Basic Scan:**
+    ```bash
+    python simon.py -d [http://example.com](http://example.com)
+    ```
+    (Scans `http://example.com`, crawls to depth 1, saves report as `vulnerability_report.pdf`.)
+
+2.  **Deep Scan with Custom Output:**
+    ```bash
+    python simon.py -d [https://mywebapp.net](https://mywebapp.net) -l 3 -o my_web_app_report.pdf
+    ```
+    (Scans `https://mywebapp.net`, crawls to depth 3, saves report as `my_web_app_report.pdf`.)
+
+3.  **Scan with Subdomain Discovery and More Threads:**
+    ```bash
+    python simon.py -d [http://maincorp.com](http://maincorp.com) --subdomains --threads 20
+    ```
+    (Scans `http://maincorp.com` and its discovered subdomains, using 20 concurrent threads.)
+
+4.  **Full-Blown Recon & Scan:**
+    ```bash
+    python simon.py -d [https://critical-system.org](https://critical-system.org) -l 2 -o full_scan_report.pdf --subdomains --threads 15
+    ```
+    (A comprehensive scan including subdomains, deeper crawling, and optimized threading.)
+""",
+        formatter_class=argparse.RawTextHelpFormatter # This line ensures epilog formatting is preserved
+    )
+    # Define command-line arguments
+    parser.add_argument('-d', '--domain', required=True, help='Target website URL (e.g., http://example.com)')
+    parser.add_argument('-l', '--level', type=int, default=1, help='Crawl depth level (default: 1)')
+    parser.add_argument('-o', '--output', default="vulnerability_report.pdf", help='Output PDF file name')
     parser.add_argument('--subdomains', action='store_true', help='Enable subdomain discovery')
-    args = parser.parse_args()
+    parser.add_argument('--threads', type=int, default=10, help='Number of threads for scanning (default: 10)')
+    args = parser.parse_args() # Parse arguments from the command line
 
+    # Assign parsed arguments to variables
     target = args.domain
-    crawl_depth = args.level
+    level = args.level
     output_file = args.output
+    enable_subdomains = args.subdomains
+    threads = args.threads
 
-    targets = [target]
-    if args.subdomains:
-        domain = urlparse(target).netloc or target
-        subdomains = discover_subdomains(domain)
-        sub_file = save_subdomains_to_file(subdomains, output_file)
-        live_subdomains = check_live_domains(subdomains)
-        targets.extend(live_subdomains)
-
+    # Initialize a dictionary to store all findings categorized by severity
     all_findings = {'Critical': [], 'High': [], 'Medium': [], 'Low': []}
 
-    for target_url in targets:
-        print(Fore.CYAN + f"\n[•] Starting scan for: {target_url}")
-        urls, params = crawl_urls(target_url, crawl_depth)
-        print(Fore.CYAN + f"[•] Discovered {len(urls)} URLs with {len(params)} parameters.")
+    try:
+        # Step 1: Discover and check live domains (including subdomains if enabled)
+        domains_to_scan = [target]
+        if enable_subdomains:
+            base_domain = urlparse(target).netloc
+            if not base_domain: # Fallback if urlparse doesn't get netloc (e.g., if target is just a domain name)
+                base_domain = target.split('/')[0]
+            
+            # Subdomain discovery now shows progress
+            subdomains = discover_subdomains(base_domain)
+            if subdomains:
+                # Live domain checking now shows progress
+                live_subdomains = check_live_domains(subdomains)
+                domains_to_scan.extend(live_subdomains) # Add live subdomains to the list of targets
 
-        for url in urls:
-            scanner = EnhancedVulnerabilityScanner(url)
-            results = scanner.scan(params)
-            for severity, vulns in results.items():
-                all_findings[severity].extend(vulns)
+        # Step 2: Iterate through each discovered (and live) domain for scanning
+        for domain in domains_to_scan:
+            print(Fore.CYAN + f"\n[*] Scanning domain: {domain}")
+            
+            # Step 2a: Crawl URLs and extract parameters for the current domain
+            print(Fore.CYAN + f"[*] Crawling up to level {level} ...")
+            urls, params = crawl_urls(domain, level)
+            print(Fore.CYAN + f"[*] Found {len(urls)} URLs and {len(params)} parameters to scan.")
+            
+            # Step 2b: Scan each found URL concurrently for vulnerabilities
+            with ThreadPoolExecutor(max_workers=threads) as executor:
+                # Map each URL to a scan task
+                future_to_url = {executor.submit(scan_single_url_task, url, params): url for url in urls}
+                # Use tqdm to show a progress bar for scanning URLs
+                for future in tqdm(as_completed(future_to_url), total=len(urls), desc="Scanning URLs"):
+                    url = future_to_url[future]
+                    try:
+                        findings = future.result() # Get the categorized findings from the scan task
+                        # Extend the main all_findings dictionary with results from this URL
+                        for severity in findings:
+                            all_findings[severity].extend(findings[severity])
+                    except Exception as e:
+                        print(Fore.RED + f"[-] Error scanning {url}: {str(e)}")
 
-    print(Fore.GREEN + f"\n[+] Scan complete. Generating report: {output_file}")
+    # Handle KeyboardInterrupt (Ctrl+C) for graceful exit and partial report generation
+    except KeyboardInterrupt:
+        print(Fore.RED + "\n[!] Scan interrupted by user. Generating report for collected findings...")
+        generate_report(output_file, all_findings) # Save report with current findings
+        sys.exit(1) # Exit with an error code
+    # Handle any other unexpected exceptions during the main execution flow
+    except Exception as e:
+        print(Fore.RED + f"\n[!] An unexpected error occurred: {str(e)}")
+        logging.error(f"Critical error in main execution: {e}", exc_info=True)
+        # Always attempt to generate a partial report even on unexpected errors
+        generate_report(output_file, all_findings) 
+        sys.exit(1) # Exit with an error code
+
+    # If the scan completes successfully without interruption, generate the final report
+    print(Fore.CYAN + f"\n[*] Generating final report: {output_file}")
     generate_report(output_file, all_findings)
-    print(Fore.GREEN + "[✓] Done.")
+    print(Fore.GREEN + "[+] Scan completed successfully. Report saved.")
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print(Fore.RED + "\n[!] Scan interrupted by user.")
-        sys.exit(1)
+    main()
+    def check_sql_injection(self):
+        for param in self.parameters:
+            for payload in SQLI_PAYLOADS:
+                test_params = {param: payload}
+                response = self.send_request(self.target_url, params=test_params)
+                if response and any(error in response.text.lower() for error in ["sql syntax", "mysql", "syntax error", "query failed", "warning: pg_"]):
+                    self.vulnerabilities.append({
+                        'type': 'SQL Injection',
+                        'url': self.target_url,
+                        'parameter': param,
+                        'payload': payload
+                    })
+
+    def check_xss(self):
+        from html import unescape
+        for param in self.parameters:
+            for payload in XSS_PAYLOADS:
+                test_params = {param: payload}
+                response = self.send_request(self.target_url, params=test_params)
+                if response and unescape(payload) in unescape(response.text):
+                    self.vulnerabilities.append({
+                        'type': 'XSS',
+                        'url': self.target_url,
+                        'parameter': param,
+                        'payload': payload
+                    })
+
+    def check_path_traversal(self):
+        for param in self.parameters:
+            for payload in PATH_TRAVERSAL_PAYLOADS:
+                test_params = {param: payload}
+                response = self.send_request(self.target_url, params=test_params)
+                if response and ("root:x:0:0:" in response.text or "windows" in response.text.lower()):
+                    self.vulnerabilities.append({
+                        'type': 'Path Traversal',
+                        'url': self.target_url,
+                        'parameter': param,
+                        'payload': payload
+                    })
+
+    def check_command_injection(self):
+        for param in self.parameters:
+            for payload in COMMAND_INJECTION_PAYLOADS:
+                test_params = {param: payload}
+                start = time.time()
+                response = self.send_request(self.target_url, params=test_params)
+                end = time.time()
+                if response and (end - start > 4.5):
+                    self.vulnerabilities.append({
+                        'type': 'Command Injection',
+                        'url': self.target_url,
+                        'parameter': param,
+                        'payload': payload
+                    })
+
+    def check_ldap_injection(self):
+        for param in self.parameters:
+            for payload in LDAP_PAYLOADS:
+                test_params = {param: payload}
+                response = self.send_request(self.target_url, params=test_params)
+                if response and "ldap" in response.text.lower():
+                    self.vulnerabilities.append({
+                        'type': 'LDAP Injection',
+                        'url': self.target_url,
+                        'parameter': param,
+                        'payload': payload
+                    })
+
+    def check_xpath_injection(self):
+        for param in self.parameters:
+            for payload in XPATH_PAYLOADS:
+                test_params = {param: payload}
+                response = self.send_request(self.target_url, params=test_params)
+                if response and "xpath" in response.text.lower():
+                    self.vulnerabilities.append({
+                        'type': 'XPath Injection',
+                        'url': self.target_url,
+                        'parameter': param,
+                        'payload': payload
+                    })
+
+    def check_clickjacking(self):
+        response = self.send_request(self.target_url)
+        if response and 'x-frame-options' not in response.headers:
+            self.vulnerabilities.append({
+                'type': 'Clickjacking',
+                'url': self.target_url,
+                'parameter': None,
+                'payload': None
+            })
+
+    def check_open_redirect(self):
+        for param in self.parameters:
+            test_params = {param: "https://evil.com"}
+            response = self.send_request(self.target_url, params=test_params)
+            if response and "evil.com" in response.url:
+                self.vulnerabilities.append({
+                    'type': 'Open Redirect',
+                    'url': self.target_url,
+                    'parameter': param,
+                    'payload': "https://evil.com"
+                })
+
+    def check_sensitive_files(self):
+        for path in SENSITIVE_FILES:
+            url = self.target_url.rstrip('/') + path
+            response = self.send_request(url)
+            if response and response.status_code == 200 and any(keyword in response.text.lower() for keyword in ["root:", "database", "wp-config", "admin"]):
+                self.vulnerabilities.append({
+                    'type': 'Sensitive File/Directory',
+                    'url': url,
+                    'parameter': None,
+                    'payload': None
+                })
+
+    def check_http_methods(self):
+        try:
+            response = requests.options(self.target_url)
+            if response.status_code == 200:
+                allowed = response.headers.get('Allow', '')
+                if any(method in allowed for method in ['PUT', 'DELETE', 'TRACE']):
+                    self.vulnerabilities.append({
+                        'type': 'HTTP Methods',
+                        'url': self.target_url,
+                        'parameter': None,
+                        'payload': allowed
+                    })
+        except Exception as e:
+            logging.debug(f"Failed HTTP method check: {e}")
+
+    def check_security_headers(self):
+        response = self.send_request(self.target_url)
+        if response:
+            missing = []
+            headers = response.headers
+            required = ['Content-Security-Policy', 'X-Content-Type-Options', 'Strict-Transport-Security', 'X-Frame-Options', 'X-XSS-Protection']
+            for header in required:
+                if header not in headers:
+                    missing.append(header)
+            if missing:
+                self.vulnerabilities.append({
+                    'type': 'Security Headers',
+                    'url': self.target_url,
+                    'parameter': None,
+                    'payload': ', '.join(missing)
+                })
+
