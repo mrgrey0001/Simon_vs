@@ -1,8 +1,2 @@
-requests
-tqdm
-colorama
-beautifulsoup4
-dnspython
-reportlab
-fpdf
-urlparse
+requests>=2.25.0
+reportlab>=3.6.0
