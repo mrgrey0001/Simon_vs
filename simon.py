@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Usage:
-python3 simon_scanner.py -d https://target.tld [-o report.pdf] [--timeout 10] [--threads 8] [--payload-dir payloads]
+python3 simon.py -d https://target.tld [-o report.pdf] [--timeout 10] [--threads 8] [--payload-dir payloads]
 """
 
 import sys
@@ -355,7 +355,8 @@ class VulnerabilityScanner:
 def generate_report(filename, target, findings):
     doc = SimpleDocTemplate(filename, pagesize=letter, title="Vulnerability Assessment Report")
     styles = getSampleStyleSheet()
-    styles.add(Paragraph(name='SeverityHeading', parent=styles['Heading2'], alignment=TA_CENTER))
+    from reportlab.lib.styles import ParagraphStyle
+    styles.add(ParagraphStyle(name='SeverityHeading', parent=styles['Heading2'], alignment=TA_CENTER))
 
     elements = []
     elements.append(Paragraph("Vulnerability Assessment Report", styles['Title']))
