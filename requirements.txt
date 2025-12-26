@@ -1,4 +1,15 @@
-requests
-colorama
-reportlab
-tqdm
+# --- Core Logic & Networking ---
+requests==2.32.3          # Standard HTTP requests
+httpx==0.27.0             # For HTTP/2 support and high-speed async requests
+beautifulsoup4==4.12.3    # For parsing HTML in simple crawls
+
+# --- Modern Browser Automation ---
+playwright==1.44.0        # For headless crawling (React/Vue/JS support)
+
+# --- Reporting & UI ---
+reportlab==4.2.0          # PDF generation
+colorama==0.4.6           # Terminal coloring
+tqdm==4.66.4              # Progress bars
+
+# --- Utilities ---
+urllib3==2.2.1            # Connection pooling
